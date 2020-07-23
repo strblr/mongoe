@@ -1,0 +1,36 @@
+{
+  "name": "mongoe",
+  "version": "0.0.1",
+  "description": "Actual ORM for MongoDB",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "test": "node lib/test.js",
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ostrebler/mongoe.git"
+  },
+  "keywords": [
+    "Mongo",
+    "MongoDB",
+    "ORM",
+    "ODM",
+    "Relation"
+  ],
+  "author": "ostrebler",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ostrebler/mongoe/issues"
+  },
+  "homepage": "https://github.com/ostrebler/mongoe#readme",
+  "devDependencies": {
+    "@types/mongodb": "^3.5.25",
+    "typescript": "^3.9.7"
+  },
+  "dependencies": {
+    "mongodb": "^3.5.9"
+  }
+}
