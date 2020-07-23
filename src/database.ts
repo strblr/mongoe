@@ -17,7 +17,7 @@ export class Database {
   collection<TSchema extends object>(
     name: string,
     foreignKeys?: Array<ForeignKeyDescriptor>
-  ): Collection<TSchema> {
+  ) {
     if (!(name in this.collections))
       this.collections[name] = new Collection<TSchema>(this, name, foreignKeys);
     const collection: Collection<TSchema> = this.collections[name];
