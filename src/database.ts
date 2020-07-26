@@ -1,5 +1,5 @@
 import { MongoClient, Db } from "mongodb";
-import { Collection, ForeignKeyDescriptor } from ".";
+import { Collection, CollectionConfig, flatten } from ".";
 
 export class Database {
   name: string;
@@ -14,15 +14,23 @@ export class Database {
     this.collections = Object.create(null);
   }
 
-  collection<TSchema extends object>(
-    name: string,
-    foreignKeys?: Array<ForeignKeyDescriptor>
-  ) {
+  collection<TSchema extends object>(name: string, config?: CollectionConfig) {
     if (!(name in this.collections))
-      this.collections[name] = new Collection<TSchema>(this, name, foreignKeys);
+      this.collections[name] = new Collection<TSchema>(this, name, config);
     const collection: Collection<TSchema> = this.collections[name];
-    if (foreignKeys && collection.foreignKeys !== foreignKeys)
-      collection.foreignKeys = foreignKeys;
     return collection;
+  }
+
+  dropDatabase() {
+    return this.handle.then(db => db.dropDatabase());
+  }
+
+  _cascade(name: string, deletedKeys: Array<any>) {
+    const cascades = Object.values(this.collections).map(collection =>
+      collection._cascade(name, deletedKeys)
+    );
+    return Promise.all(cascades)
+      .then(actions => flatten(actions))
+      .then(actions => Promise.all(actions.map(action => action())));
   }
 }
