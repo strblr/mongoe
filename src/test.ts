@@ -1,5 +1,5 @@
 import { ObjectId } from "mongodb";
-import { Database, Policy } from ".";
+import { Collection, Database } from ".";
 
 async function test() {
   const db = new Database("mongodb://localhost:27017", "mongoe_test");
@@ -21,15 +21,8 @@ async function test() {
     author: ObjectId;
   };
 
-  const Author = db.collection<Author>("Author");
-  const Book = db.collection<Book>("Book", {
-    foreignKeys: {
-      author: {
-        collection: "Author",
-        policy: Policy.Delete
-      }
-    }
-  });
+  const Author = new Collection<Author>(db, "Author");
+  const Book = new Collection<Book>(db, "Book");
 
   console.log("Inserting many authors...");
   const [king, crichton, obertone] = await Author.insertMany([
@@ -56,15 +49,10 @@ async function test() {
     element: ObjectId | null;
   };
 
-  const Element = db.collection<Element>("Element");
-  const Parameter = db.collection<Parameter>("Parameter", {
-    foreignKeys: {
-      element: {
-        collection: "Element",
-        policy: Policy.Nullify
-      }
-    }
-  });
+  const Element = new Collection<Element>(db, "Element");
+  const Parameter = new Collection<Parameter>(db, "Parameter");
+
+  // End
 
   process.exit();
 }
