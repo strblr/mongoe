@@ -7,8 +7,9 @@ async function test() {
 
   // First example
 
-  console.log("-- The Author - Book example --");
-  console.log("Setting Author and Book collections and relations...");
+  console.log("-- The Author example --");
+  console.log("Setting Author, Book and Sale collections and relations...");
+
   const Author = new Collection<{
     _id: ObjectId;
     name: string;
@@ -20,12 +21,21 @@ async function test() {
     title: string;
     author: ObjectId;
   }>(db, "Book", {
-    relation: {
-      foreignKeys: {
-        author: [Author, Policy.Delete]
-      }
+    foreignKeys: {
+      author: ["Author", Policy.Delete]
     }
   });
+
+  const Sale = new Collection<{
+    date: string;
+    customer: string;
+    book: ObjectId;
+  }>(db, "Sale", {
+    foreignKeys: {
+      book: ["Book", Policy.Delete]
+    }
+  });
+
   console.log("Relations :", db.relations);
 
   console.log("Inserting many authors...");
@@ -62,11 +72,36 @@ async function test() {
   ]);
   console.log([carrie, thinner]);
 
+  console.log("Inserting some sales...");
+  const [s1, s2, s3, s4] = await Sale.insertMany([
+    {
+      date: new Date().toISOString(),
+      customer: "Pierre Jacques",
+      book: prey._id
+    },
+    {
+      date: new Date().toISOString(),
+      customer: "Henri Dupond",
+      book: starWars1._id
+    },
+    {
+      date: new Date().toISOString(),
+      customer: "Guillaume Jean",
+      book: carrie._id
+    },
+    {
+      date: new Date().toISOString(),
+      customer: "Martin Hubert",
+      book: next._id
+    }
+  ]);
+  console.log([s1, s2, s3, s4]);
+
   console.log("Deleting Crichton from Author...");
   await Author.deleteOne({ _id: crichton._id });
 
-  console.log("Retrieving all remaining books...");
-  console.log(await Book.find({}));
+  /*console.log("Retrieving all remaining books...");
+  console.log(await Book.find({}));*/
 
   // Second example
 
@@ -95,6 +130,7 @@ async function test() {
 
   // End
 
+  console.log("Done.");
   process.exit();
 }
 

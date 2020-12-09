@@ -1,34 +1,30 @@
-import { MongoClient, Db, OptionalId, FilterQuery, UpdateQuery } from "mongodb";
-import { Collection, CollectionConfig } from ".";
-
-export type Relation = {
-  primaryKey?: string;
-  foreignKeys?: Record<string, [string | Collection<any>, Policy]>;
-};
-
-export enum Policy {
-  ByPass,
-  Delete,
-  Reject
-  /*  Nullify,
-  Unset,
-  Pull*/
-}
+import { Db, MongoClient } from "mongodb";
+import {
+  Collection,
+  CollectionOptions,
+  normalizeRelations,
+  PartialRelations,
+  Relations,
+  verifyIntegrity
+} from ".";
 
 export class Database {
   name: string;
   handle: Promise<Db>;
-  relations: Record<string, Relation>;
+  relations: Relations;
 
-  constructor(url: string, name: string, relations?: Record<string, Relation>) {
+  constructor(url: string, name: string, relations?: PartialRelations) {
     this.name = name;
     this.handle = MongoClient.connect(url, {
       useUnifiedTopology: true
     }).then(client => client.db(name));
-    this.relations = relations ?? {};
+    this.relations = normalizeRelations(relations);
   }
 
-  collection<TSchema extends object>(name: string, config?: CollectionConfig) {
+  collection<TSchema extends Record<string, any>>(
+    name: string,
+    config?: CollectionOptions
+  ) {
     return new Collection<TSchema>(this, name, config);
   }
 
@@ -36,67 +32,15 @@ export class Database {
     return this.handle.then(db => db.dropDatabase());
   }
 
-  setRelations(relations: Record<string, Relation>) {
-    this.relations = relations;
+  setRelations(relations: PartialRelations) {
+    this.relations = normalizeRelations(relations);
   }
 
-  assignRelations(relations: Record<string, Relation>) {
-    Object.assign(this.relations, relations);
+  assignRelations(relations: PartialRelations) {
+    Object.assign(this.relations, normalizeRelations(relations));
   }
 
   assertIntegrity() {
-    // Asserting integrity
-  }
-
-  async _checkInsert<TSchema>(
-    collection: string,
-    docs: Array<OptionalId<TSchema>>
-  ) {
-    // Checking insert
-  }
-
-  async _checkUpdate<TSchema>(
-    collection: string,
-    filter: FilterQuery<TSchema>,
-    update: UpdateQuery<TSchema> | Partial<TSchema>,
-    many = false
-  ) {
-    // Checking update
-  }
-
-  async _checkDelete<TSchema>(
-    collection: string,
-    filter: FilterQuery<TSchema>,
-    many = false
-  ) {
-    // Checking delete
+    return verifyIntegrity(this);
   }
 }
-
-/*
-  REMOVE Filter F in Collection C {
-    Filters <= [(F, C)]
-    AllKeys <= []
-    AllActions <= [DELETE(F, C)]
-
-    WHILE((F, C) in Filters) {
-      NewKeys <= C.keysOfFilter(F) MINUS AllKeys
-      if(NewKeys IS EMPTY)
-        continue
-
-      NewActions <= Db.propagate(NewKeys)
-      if(NewActions CONTAINS REJECT)
-        REJECT REMOVE
-
-      Filters.push(filtersIn(NewActions))
-      AllKeys.push(NewKeys)
-      AllActions.push(NewActions)
-    }
-
-    EXECUTE AllActions.reverse()
-  }
- */
-
-/*
-
- */
