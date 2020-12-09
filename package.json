@@ -1,7 +1,7 @@
 {
   "name": "mongoe",
-  "version": "0.0.1",
-  "description": "Actual ORM for MongoDB",
+  "version": "0.0.2",
+  "description": "MongoDB driver with relational functionalities ",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
@@ -27,10 +27,10 @@
   },
   "homepage": "https://github.com/ostrebler/mongoe#readme",
   "devDependencies": {
-    "@types/mongodb": "^3.5.25",
-    "typescript": "^3.9.7"
+    "@types/mongodb": "^3.6.2",
+    "typescript": "^4.1.2"
   },
   "dependencies": {
-    "mongodb": "^3.5.9"
+    "mongodb": "^3.6.3"
   }
 }

@@ -10,7 +10,6 @@ import {
   DbCollectionOptions,
   FilterQuery,
   FindOneAndDeleteOption,
-  FindOneAndReplaceOption,
   FindOneAndUpdateOption,
   FindOneOptions,
   GeoHaystackSearchOptions,
@@ -21,14 +20,14 @@ import {
   MongoDistinctPreferences,
   OptionalId,
   ReadPreferenceOrMode,
-  ReplaceOneOptions,
   UpdateManyOptions,
   UpdateOneOptions,
   UpdateQuery
 } from "mongodb";
-import { Database } from ".";
+import { Database, Relation } from ".";
 
 export type CollectionConfig = {
+  relation?: Relation;
   mongodbOptions?: DbCollectionOptions;
 };
 
@@ -43,15 +42,27 @@ export class Collection<TSchema extends object> {
     this.handle = database.handle.then(db =>
       db.collection<TSchema>(name, config?.mongodbOptions ?? {})
     );
+    config?.relation &&
+      Object.assign(database.relations, { [name]: config.relation });
+  }
+
+  setRelation(relation: Relation) {
+    Object.assign(this.database.relations, { [this.name]: relation });
   }
 
   // Query methods :
 
-  findOne(filter: FilterQuery<TSchema>, options?: FindOneOptions) {
+  findOne<T = TSchema>(
+    filter: FilterQuery<TSchema>,
+    options?: FindOneOptions<T extends TSchema ? TSchema : T>
+  ) {
     return this.handle.then(col => col.findOne(filter, options));
   }
 
-  find(query: FilterQuery<TSchema>, options?: FindOneOptions) {
+  find<T = TSchema>(
+    query: FilterQuery<TSchema>,
+    options?: FindOneOptions<T extends TSchema ? TSchema : T>
+  ) {
     return this.handle.then(col => col.find(query, options).toArray());
   }
 
@@ -114,9 +125,11 @@ export class Collection<TSchema extends object> {
 
   // Insert methods :
 
-  insertOne(docs: OptionalId<TSchema>, options?: CollectionInsertOneOptions) {
-    return this.handle
-      .then(col => col.insertOne(docs, options))
+  insertOne(doc: OptionalId<TSchema>, options?: CollectionInsertOneOptions) {
+    return this.database
+      ._checkInsert(this.name, [doc])
+      .then(() => this.handle)
+      .then(col => col.insertOne(doc, options))
       .then(({ ops }) => ops[0]);
   }
 
@@ -124,7 +137,9 @@ export class Collection<TSchema extends object> {
     docs: Array<OptionalId<TSchema>>,
     options?: CollectionInsertManyOptions
   ) {
-    return this.handle
+    return this.database
+      ._checkInsert(this.name, docs)
+      .then(() => this.handle)
       .then(col => col.insertMany(docs, options))
       .then(({ ops }) => ops);
   }
@@ -136,7 +151,10 @@ export class Collection<TSchema extends object> {
     update: UpdateQuery<TSchema> | Partial<TSchema>,
     options?: UpdateOneOptions
   ) {
-    return this.handle.then(col => col.updateOne(filter, update, options));
+    return this.database
+      ._checkUpdate(this.name, filter, update)
+      .then(() => this.handle)
+      .then(col => col.updateOne(filter, update, options));
   }
 
   updateMany(
@@ -144,60 +162,59 @@ export class Collection<TSchema extends object> {
     update: UpdateQuery<TSchema> | Partial<TSchema>,
     options?: UpdateManyOptions
   ) {
-    return this.handle.then(col => col.updateMany(filter, update, options));
-  }
-
-  replaceOne(
-    filter: FilterQuery<TSchema>,
-    doc: TSchema,
-    options?: ReplaceOneOptions
-  ) {
-    return this.handle
-      .then(col => col.replaceOne(filter, doc, options))
-      .then(({ ops }): TSchema => ops[0]);
+    return this.database
+      ._checkUpdate(this.name, filter, update, true)
+      .then(() => this.handle)
+      .then(col => col.updateMany(filter, update, options));
   }
 
   findOneAndUpdate(
     filter: FilterQuery<TSchema>,
     update: UpdateQuery<TSchema> | TSchema,
-    options?: FindOneAndUpdateOption
+    options?: FindOneAndUpdateOption<TSchema>
   ) {
-    return this.handle
+    return this.database
+      ._checkUpdate(this.name, filter, update)
+      .then(() => this.handle)
       .then(col => col.findOneAndUpdate(filter, update, options))
-      .then(({ value }) => value || null);
-  }
-
-  findOneAndReplace(
-    filter: FilterQuery<TSchema>,
-    replacement: OptionalId<TSchema>,
-    options?: FindOneAndReplaceOption
-  ) {
-    return this.handle
-      .then(col => col.findOneAndReplace(filter, replacement, options))
-      .then(({ value }) => value || null);
+      .then(({ value }) => value ?? null);
   }
 
   // Deletion methods :
 
-  deleteOne(filter: FilterQuery<TSchema>, options?: CommonOptions) {
-    return this.handle.then(col => col.deleteOne(filter, options));
+  deleteOne(
+    filter: FilterQuery<TSchema>,
+    options?: CommonOptions & { bypassDocumentValidation?: boolean }
+  ) {
+    return this.database
+      ._checkDelete(this.name, filter)
+      .then(() => this.handle)
+      .then(col => col.deleteOne(filter, options));
   }
 
   deleteMany(filter: FilterQuery<TSchema>, options?: CommonOptions) {
-    return this.handle.then(col => col.deleteMany(filter, options));
+    return this.database
+      ._checkDelete(this.name, filter, true)
+      .then(() => this.handle)
+      .then(col => col.deleteMany(filter, options));
   }
 
   findOneAndDelete(
     filter: FilterQuery<TSchema>,
-    options?: FindOneAndDeleteOption
+    options?: FindOneAndDeleteOption<TSchema>
   ) {
-    return this.handle
+    return this.database
+      ._checkDelete(this.name, filter)
+      .then(() => this.handle)
       .then(col => col.findOneAndDelete(filter, options))
-      .then(({ value }) => value || null);
+      .then(({ value }) => value ?? null);
   }
 
   drop(options?: { session: ClientSession }) {
-    return this.handle.then(col => col.drop(options));
+    return this.database
+      ._checkDelete(this.name, {})
+      .then(() => this.handle)
+      .then(col => col.drop(options));
   }
 
   // Indexation methods :

@@ -3,21 +3,16 @@ import { Collection, CollectionConfig } from ".";
 
 export type Relation = {
   primaryKey?: string;
-  foreignKeys?: Record<string, ForeignKey>;
-};
-
-export type ForeignKey = {
-  collection: string;
-  policy: Policy;
+  foreignKeys?: Record<string, [string | Collection<any>, Policy]>;
 };
 
 export enum Policy {
   ByPass,
-  Nullify,
-  Unset,
-  Pull,
   Delete,
   Reject
+  /*  Nullify,
+  Unset,
+  Pull*/
 }
 
 export class Database {
@@ -30,7 +25,7 @@ export class Database {
     this.handle = MongoClient.connect(url, {
       useUnifiedTopology: true
     }).then(client => client.db(name));
-    this.relations = relations ?? Object.create(null);
+    this.relations = relations ?? {};
   }
 
   collection<TSchema extends object>(name: string, config?: CollectionConfig) {
@@ -41,29 +36,40 @@ export class Database {
     return this.handle.then(db => db.dropDatabase());
   }
 
+  setRelations(relations: Record<string, Relation>) {
+    this.relations = relations;
+  }
+
+  assignRelations(relations: Record<string, Relation>) {
+    Object.assign(this.relations, relations);
+  }
+
   assertIntegrity() {
-    console.log("Asserting integrity");
+    // Asserting integrity
   }
 
-  _checkInsert<TSchema>(collection: string, docs: Array<OptionalId<TSchema>>) {
-    console.log("Checking insert");
+  async _checkInsert<TSchema>(
+    collection: string,
+    docs: Array<OptionalId<TSchema>>
+  ) {
+    // Checking insert
   }
 
-  _checkUpdate<TSchema>(
+  async _checkUpdate<TSchema>(
     collection: string,
     filter: FilterQuery<TSchema>,
-    update: UpdateQuery<TSchema> | TSchema,
+    update: UpdateQuery<TSchema> | Partial<TSchema>,
     many = false
   ) {
-    console.log("Checking update");
+    // Checking update
   }
 
-  _checkDelete<TSchema>(
+  async _checkDelete<TSchema>(
     collection: string,
     filter: FilterQuery<TSchema>,
     many = false
   ) {
-    console.log("Checking delete");
+    // Checking delete
   }
 }
 
