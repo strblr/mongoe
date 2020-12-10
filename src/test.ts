@@ -36,7 +36,7 @@ async function test() {
     }
   });
 
-  console.log("Relations :", db.relations);
+  console.log("Relations :", JSON.stringify(db.relations, null, 2));
 
   console.log("Inserting many authors...");
   const [king, crichton, obertone] = await Author.insertMany([

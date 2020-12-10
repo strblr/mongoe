@@ -26,15 +26,15 @@ import {
 } from "mongodb";
 import {
   Database,
-  PartialRelation,
+  RelationInput,
   verifyDelete,
   verifyInsert,
   verifyUpdate
 } from ".";
 
-export type CollectionOptions = PartialRelation & DbCollectionOptions;
+export type CollectionOptions = DbCollectionOptions & RelationInput;
 
-export class Collection<TSchema extends Record<string, any>> {
+export class Collection<TSchema extends object> {
   name: string;
   database: Database;
   handle: Promise<Col<TSchema>>;
@@ -49,17 +49,11 @@ export class Collection<TSchema extends Record<string, any>> {
     this.handle = database.handle.then(db =>
       db.collection<TSchema>(name, mongodbOptions)
     );
-    (primaryKey || foreignKeys) &&
-      database.assignRelations({
-        [name]: {
-          primaryKey,
-          foreignKeys
-        }
-      });
+    this.registerRelation({ primaryKey, foreignKeys });
   }
 
-  setRelation(relation: PartialRelation) {
-    this.database.assignRelations({
+  registerRelation(relation: RelationInput) {
+    this.database.registerRelations({
       [this.name]: relation
     });
   }
@@ -133,14 +127,14 @@ export class Collection<TSchema extends Record<string, any>> {
     return this.handle.then(col => col.stats(options));
   }
 
-  mongodbOptions(options?: { session: ClientSession }) {
+  options(options?: { session: ClientSession }) {
     return this.handle.then(col => col.options(options));
   }
 
   // Insert methods :
 
   insertOne(doc: OptionalId<TSchema>, options?: CollectionInsertOneOptions) {
-    return verifyInsert(this.database, this, [doc])
+    return verifyInsert(this, [doc])
       .then(() => this.handle)
       .then(col => col.insertOne(doc, options))
       .then(({ ops }) => ops[0]);
@@ -150,7 +144,7 @@ export class Collection<TSchema extends Record<string, any>> {
     docs: Array<OptionalId<TSchema>>,
     options?: CollectionInsertManyOptions
   ) {
-    return verifyInsert(this.database, this, docs)
+    return verifyInsert(this, docs)
       .then(() => this.handle)
       .then(col => col.insertMany(docs, options))
       .then(({ ops }) => ops);
@@ -163,7 +157,7 @@ export class Collection<TSchema extends Record<string, any>> {
     update: UpdateQuery<TSchema> | Partial<TSchema>,
     options?: UpdateOneOptions
   ) {
-    return verifyUpdate(this.database, this, filter, update, { many: false })
+    return verifyUpdate(this, filter, update, { many: false })
       .then(() => this.handle)
       .then(col => col.updateOne(filter, update, options));
   }
@@ -173,7 +167,7 @@ export class Collection<TSchema extends Record<string, any>> {
     update: UpdateQuery<TSchema> | Partial<TSchema>,
     options?: UpdateManyOptions
   ) {
-    return verifyUpdate(this.database, this, filter, update, { many: true })
+    return verifyUpdate(this, filter, update, { many: true })
       .then(() => this.handle)
       .then(col => col.updateMany(filter, update, options));
   }
@@ -183,7 +177,7 @@ export class Collection<TSchema extends Record<string, any>> {
     update: UpdateQuery<TSchema> | TSchema,
     options?: FindOneAndUpdateOption<TSchema>
   ) {
-    return verifyUpdate(this.database, this, filter, update, {
+    return verifyUpdate(this, filter, update, {
       many: false,
       sort: options?.sort
     })
@@ -196,24 +190,30 @@ export class Collection<TSchema extends Record<string, any>> {
 
   deleteOne(
     filter: FilterQuery<TSchema>,
-    options?: CommonOptions & { bypassDocumentValidation?: boolean }
+    options?: CommonOptions & { bypassDocumentValidation?: boolean },
+    deletedKeys: Record<string, Array<any>> = {}
   ) {
-    return verifyDelete(this.database, this, filter, { many: false })
+    return verifyDelete(this, filter, deletedKeys, { many: false })
       .then(() => this.handle)
       .then(col => col.deleteOne(filter, options));
   }
 
-  deleteMany(filter: FilterQuery<TSchema>, options?: CommonOptions) {
-    return verifyDelete(this.database, this, filter, { many: true })
+  deleteMany(
+    filter: FilterQuery<TSchema>,
+    options?: CommonOptions,
+    deletedKeys: Record<string, Array<any>> = {}
+  ) {
+    return verifyDelete(this, filter, deletedKeys, { many: true })
       .then(() => this.handle)
       .then(col => col.deleteMany(filter, options));
   }
 
   findOneAndDelete(
     filter: FilterQuery<TSchema>,
-    options?: FindOneAndDeleteOption<TSchema>
+    options?: FindOneAndDeleteOption<TSchema>,
+    deletedKeys: Record<string, Array<any>> = {}
   ) {
-    return verifyDelete(this.database, this, filter, {
+    return verifyDelete(this, filter, deletedKeys, {
       many: false,
       sort: options?.sort
     })
@@ -222,8 +222,11 @@ export class Collection<TSchema extends Record<string, any>> {
       .then(({ value }) => value ?? null);
   }
 
-  drop(options?: { session: ClientSession }) {
-    return verifyDelete(this.database, this, {}, { many: true })
+  drop(
+    options?: { session: ClientSession },
+    deletedKeys: Record<string, Array<any>> = {}
+  ) {
+    return verifyDelete(this, {}, deletedKeys, { many: true })
       .then(() => this.handle)
       .then(col => col.drop(options));
   }

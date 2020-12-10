@@ -1,46 +1,55 @@
 import {
   FilterQuery,
+  ObjectId,
   OptionalId,
   SortOptionObject,
   UpdateQuery
 } from "mongodb";
-import { Collection, Database } from ".";
+import { Collection, Database, substractKeys } from ".";
+
+export type Relation = {
+  primaryKey: string;
+  foreignRefs: Array<readonly [string, string, Policy]>;
+};
+
+export type RelationInput = {
+  primaryKey?: string;
+  foreignKeys?: Record<string, readonly [string, Policy]>;
+};
 
 export enum Policy {
   ByPass,
   Delete,
-  Reject
-  /*  Nullify,
-  Unset,
+  Reject,
+  Nullify
+  /*Unset,
   Pull*/
 }
 
-export type Relations = Record<string, Relation>;
-
-export type PartialRelations = Record<string, PartialRelation>;
-
-export type Relation = {
-  primaryKey: string;
-  foreignKeys: Record<string, [string, Policy]>;
-};
-
-export type PartialRelation = Partial<Relation>;
-
-export function normalizeRelation(relation?: PartialRelation): Relation {
-  return {
-    primaryKey: relation?.primaryKey ?? "_id",
-    foreignKeys: relation?.foreignKeys ?? {}
-  };
-}
-
-export function normalizeRelations(relations?: PartialRelations) {
-  return Object.entries(relations ?? {}).reduce<Relations>(
-    (acc, [name, relation]) => ({
-      ...acc,
-      [name]: normalizeRelation(relation)
-    }),
-    {}
-  );
+export function registerRelations(
+  relations: Record<string, Relation>,
+  inputs: Record<string, RelationInput>
+) {
+  for (const [collection, relation] of Object.entries(inputs)) {
+    if (!relations[collection])
+      relations[collection] = {
+        primaryKey: relation.primaryKey ?? "_id",
+        foreignRefs: []
+      };
+    else if (relation.primaryKey)
+      relations[collection].primaryKey = relation.primaryKey;
+    for (const [foreignKey, [foreignCollection, policy]] of Object.entries(
+      relation.foreignKeys ?? {}
+    )) {
+      const foreignRef = [collection, foreignKey, policy] as const;
+      if (!relations[foreignCollection])
+        relations[foreignCollection] = {
+          primaryKey: "_id",
+          foreignRefs: [foreignRef]
+        };
+      else relations[foreignCollection].foreignRefs.push(foreignRef);
+    }
+  }
 }
 
 export async function verifyIntegrity(database: Database) {
@@ -48,7 +57,6 @@ export async function verifyIntegrity(database: Database) {
 }
 
 export async function verifyInsert<TSchema extends Record<string, any>>(
-  database: Database,
   collection: Collection<TSchema>,
   docs: Array<OptionalId<TSchema>>
 ) {
@@ -56,7 +64,6 @@ export async function verifyInsert<TSchema extends Record<string, any>>(
 }
 
 export async function verifyUpdate<TSchema extends Record<string, any>>(
-  database: Database,
   collection: Collection<TSchema>,
   filter: FilterQuery<TSchema>,
   update: UpdateQuery<TSchema> | Partial<TSchema>,
@@ -69,46 +76,59 @@ export async function verifyUpdate<TSchema extends Record<string, any>>(
 }
 
 export async function verifyDelete(
-  database: Database,
   collection: Collection<any>,
   filter: FilterQuery<any>,
+  deletedKeys: Record<string, Array<any>>,
   options: {
     many: boolean;
     sort?: SortOptionObject<any>;
   }
 ) {
-  return;
-  const relation = database.relations[collection.name] ?? normalizeRelation({});
+  if (!deletedKeys[collection.name]) deletedKeys[collection.name] = [];
+
+  const alreadyDeleted = deletedKeys[collection.name];
+  const { primaryKey, foreignRefs } = collection.database.relations[
+    collection.name
+  ];
 
   const keys = await collection
     .find(filter, {
-      projection: { [relation.primaryKey]: 1 },
-      sort: options.sort as any,
+      projection: { [primaryKey]: 1 },
+      sort: options.sort,
       limit: options.many ? undefined : 1
     })
-    .then(docs => docs.map(doc => doc[relation.primaryKey]));
+    .then(docs => docs.map(doc => doc[primaryKey]))
+    .then(keys => substractKeys(keys, alreadyDeleted));
+
+  alreadyDeleted.push(...keys);
 
   console.log("Want to remove", keys, "in", collection.name);
+  console.log("State of deletedKeys:", deletedKeys, "\n");
 
-  for (const [siblingCollectionName, relation] of Object.entries(
-    database.relations
-  ))
-    for (const [foreignKey, [foreignCollectionName, policy]] of Object.entries(
-      relation.foreignKeys
-    )) {
-      if (collection.name === foreignCollectionName)
-        switch (policy) {
-          case Policy.ByPass:
-            break;
-          case Policy.Reject:
-            throw new Error(
-              `Mongoe: Deletion rejected by foreign key <${foreignKey}> on collection <${siblingCollectionName}>`
-            );
-          case Policy.Delete:
-            const sibling = database.collection(siblingCollectionName);
-            /*const docs = await sibling.find({ [foreignKey]: { $in: keys } });
-            console.log("Must also remove from", sibling.name, ":", docs);*/
-            await sibling.deleteMany({ [foreignKey]: { $in: keys } });
-        }
-    }
+  for (const [foreignCollectionName, foreignKey, policy] of foreignRefs) {
+    const foreignCollection = collection.database.collection(
+      foreignCollectionName
+    );
+    if (await foreignCollection.countDocuments({ [foreignKey]: { $in: keys } }))
+      switch (policy) {
+        case Policy.ByPass:
+          break;
+        case Policy.Reject:
+          throw new Error(
+            `Mongoe: Deletion rejected by foreign key <${foreignKey}> on collection <${foreignCollectionName}>`
+          );
+        case Policy.Delete:
+          await foreignCollection.deleteMany(
+            { [foreignKey]: { $in: keys } },
+            undefined,
+            deletedKeys
+          );
+          break;
+        case Policy.Nullify:
+          await foreignCollection.updateMany(
+            { [foreignKey]: { $in: keys } },
+            { $set: { [foreignKey]: null } }
+          );
+      }
+  }
 }
