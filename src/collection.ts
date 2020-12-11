@@ -29,6 +29,7 @@ import {
   RelationInput,
   verifyDelete,
   verifyInsert,
+  verifyIntegrity,
   verifyUpdate
 } from ".";
 
@@ -42,20 +43,24 @@ export class Collection<TSchema extends object> {
   constructor(
     database: Database,
     name: string,
-    { primaryKey, foreignKeys, ...mongodbOptions }: CollectionOptions = {}
+    { primaryKey, foreignKeys, ...options }: CollectionOptions = {}
   ) {
     this.name = name;
     this.database = database;
     this.handle = database.handle.then(db =>
-      db.collection<TSchema>(name, mongodbOptions)
+      db.collection<TSchema>(name, options)
     );
-    this.registerRelation({ primaryKey, foreignKeys });
+    this.setRelation({ primaryKey, foreignKeys });
   }
 
-  registerRelation(relation: RelationInput) {
-    this.database.registerRelations({
+  setRelation(relation: RelationInput) {
+    this.database.setRelations({
       [this.name]: relation
     });
+  }
+
+  assertIntegrity() {
+    return verifyIntegrity(this);
   }
 
   // Query methods :

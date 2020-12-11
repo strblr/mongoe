@@ -4,7 +4,7 @@ import {
   SortOptionObject,
   UpdateQuery
 } from "mongodb";
-import { Collection, Database, substractKeys } from ".";
+import { Collection, substractKeys } from ".";
 
 export type Relation = {
   primaryKey: string;
@@ -20,9 +20,8 @@ export enum Policy {
   ByPass,
   Delete,
   Reject,
-  Nullify
-  /*Unset,
-  Pull*/
+  Nullify,
+  Unset
 }
 
 export function registerRelations(
@@ -51,21 +50,23 @@ export function registerRelations(
   }
 }
 
-export async function verifyIntegrity(database: Database) {
-  // ...
+export async function verifyIntegrity(collection: Collection<any>) {
+  const { primaryKey, foreignRefs } = collection.database.relations[
+    collection.name
+  ];
 }
 
-export async function verifyInsert<TSchema extends Record<string, any>>(
-  collection: Collection<TSchema>,
-  docs: Array<OptionalId<TSchema>>
+export async function verifyInsert(
+  collection: Collection<any>,
+  docs: Array<OptionalId<any>>
 ) {
   // ...
 }
 
-export async function verifyUpdate<TSchema extends Record<string, any>>(
-  collection: Collection<TSchema>,
-  filter: FilterQuery<TSchema>,
-  update: UpdateQuery<TSchema> | Partial<TSchema>,
+export async function verifyUpdate(
+  collection: Collection<any>,
+  filter: FilterQuery<any>,
+  update: UpdateQuery<any> | Partial<any>,
   options: {
     many: boolean;
     sort?: SortOptionObject<any>;
@@ -83,13 +84,14 @@ export async function verifyDelete(
     sort?: SortOptionObject<any>;
   }
 ) {
-  return;
-  if (!deletedKeys[collection.name]) deletedKeys[collection.name] = [];
-
-  const alreadyDeleted = deletedKeys[collection.name];
+  console.log("Want to remove", filter, "in", collection.name);
   const { primaryKey, foreignRefs } = collection.database.relations[
     collection.name
   ];
+  if (foreignRefs.length === 0) return;
+
+  if (!deletedKeys[collection.name]) deletedKeys[collection.name] = [];
+  const alreadyDeleted = deletedKeys[collection.name];
 
   const keys = await collection
     .find(filter, {
@@ -101,9 +103,6 @@ export async function verifyDelete(
     .then(keys => substractKeys(keys, alreadyDeleted));
 
   alreadyDeleted.push(...keys);
-
-  console.log("Want to remove", keys, "in", collection.name);
-  console.log("State of deletedKeys:", deletedKeys, "\n");
 
   for (const [foreignCollectionName, foreignKey, policy] of foreignRefs) {
     const foreignCollection = collection.database.collection(
@@ -129,6 +128,13 @@ export async function verifyDelete(
             { [foreignKey]: { $in: keys } },
             { $set: { [foreignKey]: null } }
           );
+          break;
+        case Policy.Unset:
+          await foreignCollection.updateMany(
+            { [foreignKey]: { $in: keys } },
+            { $unset: { [foreignKey]: "" } }
+          );
+          break;
       }
   }
 }

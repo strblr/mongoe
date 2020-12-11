@@ -4,8 +4,7 @@ import {
   CollectionOptions,
   registerRelations,
   Relation,
-  RelationInput,
-  verifyIntegrity
+  RelationInput
 } from ".";
 
 export class Database {
@@ -22,7 +21,7 @@ export class Database {
     this.handle = MongoClient.connect(url, {
       useUnifiedTopology: true
     }).then(client => client.db(name));
-    this.registerRelations(relations ?? {});
+    this.setRelations(relations ?? {});
   }
 
   collection<TSchema extends object>(name: string, config?: CollectionOptions) {
@@ -33,11 +32,12 @@ export class Database {
     return this.handle.then(db => db.dropDatabase());
   }
 
-  registerRelations(relations: Record<string, RelationInput>) {
+  setRelations(relations: Record<string, RelationInput>) {
     registerRelations(this.relations, relations);
   }
 
-  assertIntegrity() {
-    return verifyIntegrity(this);
+  async assertIntegrity() {
+    for (const name of Object.keys(this.relations))
+      await this.collection(name).assertIntegrity();
   }
 }

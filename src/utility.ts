@@ -9,7 +9,7 @@ export function idify(str: string): ObjectId;
 export function idify(str: string | null | undefined): ObjectId | null;
 
 export function idify(str: string | null | undefined): ObjectId | null {
-  if (typeof str !== "string") return null;
+  if (str === null || str === undefined) return null;
   if (!ObjectId.isValid(str))
     throw new Error(`Invalid hex value <${str}> passed to idify`);
   return ObjectId.createFromHexString(str);
