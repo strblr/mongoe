@@ -1,6 +1,6 @@
 {
   "name": "mongoe",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "MongoDB driver with relational functionalities ",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

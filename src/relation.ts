@@ -1,6 +1,5 @@
 import {
   FilterQuery,
-  ObjectId,
   OptionalId,
   SortOptionObject,
   UpdateQuery
@@ -84,6 +83,7 @@ export async function verifyDelete(
     sort?: SortOptionObject<any>;
   }
 ) {
+  return;
   if (!deletedKeys[collection.name]) deletedKeys[collection.name] = [];
 
   const alreadyDeleted = deletedKeys[collection.name];
